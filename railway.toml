@@ -1,0 +1,22 @@
+[build]
+builder = "nixpacks"
+
+[build.nixpacksPlan.phases.setup]
+nixPkgs = ["ffmpeg"]
+
+[build.nixpacksPlan.phases.install]
+cmds = ["npm install"]
+
+[deploy]
+startCommand = "node scheduler/cron.mjs"
+healthcheckPath = "/"
+restartPolicyType = "on_failure"
+restartPolicyMaxRetries = 3
+
+# Environment variables required (set in Railway dashboard):
+# ANTHROPIC_API_KEY
+# ELEVENLABS_API_KEY
+# ELEVENLABS_VOICE_ID
+# YOUTUBE_CLIENT_ID
+# YOUTUBE_CLIENT_SECRET
+# YOUTUBE_REFRESH_TOKEN
