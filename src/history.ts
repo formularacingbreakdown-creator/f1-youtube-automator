@@ -53,7 +53,22 @@ export function hasBeenPosted(topicKey: string): boolean {
  * Returns empty string if no history.
  */
 export function getAvoidList(mode: string): string {
-  const past = getPastTopics(mode);
+  // For daily modes, check ALL daily-* modes to avoid repeats across content types too
+  const history = loadHistory();
+  const isDailyMode = mode.startsWith("daily-");
+  const past = history
+    .filter((e) => isDailyMode ? e.mode.startsWith("daily-") : e.mode === mode)
+    .map((e) => e.title);
   if (past.length === 0) return "";
-  return `\n\nIMPORTANT — Do NOT repeat these topics, they have already been covered:\n${past.map((t) => `- ${t}`).join("\n")}`;
+  return `\n\nIMPORTANT — Do NOT repeat these topics, they have already been covered:\n${past.map((t) => `- ${t}`).join("\n")}\n\nYou MUST pick a completely different angle, stat, or subject.`;
+}
+
+/**
+ * Get descriptions of past entries for a mode to help data fetchers avoid duplicate raw topics.
+ */
+export function getUsedDescriptions(mode: string): string[] {
+  const history = loadHistory();
+  return history
+    .filter((e) => e.mode.startsWith("daily-"))
+    .map((e) => e.description);
 }

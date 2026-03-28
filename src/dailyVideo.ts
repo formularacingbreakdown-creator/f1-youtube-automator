@@ -7,7 +7,7 @@ import { generateVoiceover } from "./voiceover.js";
 import { assembleVideo } from "./videoAssembler.js";
 import { uploadToYouTube } from "./youtubeUploader.js";
 import { generateThumbnail } from "./thumbnailGenerator.js";
-import { getAvoidList, saveEntry } from "./history.js";
+import { getAvoidList, saveEntry, loadHistory } from "./history.js";
 import type { ScriptOutput } from "./types.js";
 
 const BASE_URL = "https://api.jolpi.ca/ergast/f1";
@@ -62,20 +62,50 @@ function pickRandom<T>(arr: T[]): T {
   return arr[Math.floor(Math.random() * arr.length)];
 }
 
-// Use today's date to seed a deterministic-ish pick so reruns on the same day get the same type
+// Pick a content type that hasn't been used today yet, cycling through all types
 function getTodaysContentType(): ContentType {
-  const today = new Date();
-  const dayOfYear = Math.floor(
-    (today.getTime() - new Date(today.getFullYear(), 0, 0).getTime()) / 86400000
-  );
-  return CONTENT_TYPES[dayOfYear % CONTENT_TYPES.length];
+  const today = new Date().toISOString().slice(0, 10); // "2026-03-28"
+  const history = loadHistory();
+  const usedToday = history
+    .filter((e) => e.date.startsWith(today) && e.mode.startsWith("daily-"))
+    .map((e) => e.mode.replace("daily-", "") as ContentType);
+
+  // Find content types not yet used today
+  const available = CONTENT_TYPES.filter((t) => !usedToday.includes(t));
+
+  if (available.length > 0) {
+    // Pick from unused types
+    return available[Math.floor(Math.random() * available.length)];
+  }
+
+  // All types used today — pick least recently used overall
+  const allUsed = history
+    .filter((e) => e.mode.startsWith("daily-"))
+    .map((e) => e.mode.replace("daily-", "") as ContentType);
+  const counts: Record<string, number> = {};
+  for (const t of CONTENT_TYPES) counts[t] = 0;
+  for (const t of allUsed) counts[t] = (counts[t] || 0) + 1;
+  const sorted = CONTENT_TYPES.sort((a, b) => counts[a] - counts[b]);
+  return sorted[0];
 }
 
 // ── Data fetchers ──
 
 async function fetchDailyStatData(): Promise<string> {
-  // Pick a random season and fetch its champion + stats
-  const season = 1950 + Math.floor(Math.random() * 75); // 1950–2024
+  // Pick a random season, avoiding ones we've already covered
+  const pastDescriptions = loadHistory()
+    .filter((e) => e.mode === "daily-daily-stat")
+    .map((e) => e.description);
+
+  let season: number;
+  let attempts = 0;
+  do {
+    season = 1950 + Math.floor(Math.random() * 75); // 1950–2024
+    attempts++;
+  } while (
+    attempts < 20 &&
+    pastDescriptions.some((d) => d.includes(String(season)))
+  );
   console.log(`[Data] Fetching stats for ${season} season...`);
 
   const [standingsResp, raceResp] = await Promise.all([
@@ -106,7 +136,15 @@ async function fetchDailyStatData(): Promise<string> {
 }
 
 async function fetchHeadToHeadData(): Promise<string> {
-  const [driver1, driver2] = pickRandom(LEGENDARY_DRIVERS);
+  const pastTitles = loadHistory()
+    .filter((e) => e.mode === "daily-head-to-head")
+    .map((e) => e.title.toLowerCase());
+
+  const unusedPairs = LEGENDARY_DRIVERS.filter(([d1, d2]) =>
+    !pastTitles.some((t) => t.includes(d1.split(" ").pop()!.toLowerCase()) && t.includes(d2.split(" ").pop()!.toLowerCase()))
+  );
+
+  const [driver1, driver2] = unusedPairs.length > 0 ? pickRandom(unusedPairs) : pickRandom(LEGENDARY_DRIVERS);
   console.log(`[Data] Fetching head-to-head: ${driver1} vs ${driver2}...`);
 
   // Fetch career stats for both
@@ -194,7 +232,19 @@ Today's date: ${today.toLocaleDateString("en-US", { month: "long", day: "numeric
 }
 
 async function fetchBestEverData(): Promise<string> {
-  const topic = pickRandom(BEST_EVER_TOPICS);
+  // Filter out topics that overlap with previous descriptions
+  const pastDescriptions = loadHistory()
+    .filter((e) => e.mode === "daily-best-ever")
+    .map((e) => e.description.toLowerCase());
+
+  const unusedTopics = BEST_EVER_TOPICS.filter((topic) =>
+    !pastDescriptions.some((desc) => {
+      const keywords = topic.toLowerCase().split(" ").filter((w) => w.length > 4);
+      return keywords.filter((kw) => desc.includes(kw)).length >= 2;
+    })
+  );
+
+  const topic = unusedTopics.length > 0 ? pickRandom(unusedTopics) : pickRandom(BEST_EVER_TOPICS);
   console.log(`[Data] Fetching data for best-ever topic: "${topic}"...`);
 
   // Fetch a spread of recent championship data for context
