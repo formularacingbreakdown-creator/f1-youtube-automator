@@ -7,6 +7,7 @@ import { generateVoiceover } from "./voiceover.js";
 import { assembleVideo } from "./videoAssembler.js";
 import { uploadToYouTube } from "./youtubeUploader.js";
 import { generateThumbnail } from "./thumbnailGenerator.js";
+import { prepareCaptions } from "./captions.js";
 import { saveEntry } from "./history.js";
 import type { VideoMode, RaceData, ScriptOutput } from "./types.js";
 
@@ -91,24 +92,31 @@ async function main() {
 
   // Step 3: Generate or reuse voiceover
   const voiceoverPath = getVoiceoverPath(topicKey);
+  let durationSeconds: number;
 
   if (fs.existsSync(voiceoverPath)) {
     console.log(`\n--- Step 3: Reusing existing voiceover for "${topicKey}" ---`);
     console.log(`[Voiceover] ${voiceoverPath}`);
+    // Estimate duration from file size (~16KB/s for MP3 128kbps)
+    durationSeconds = fs.statSync(voiceoverPath).size / 16000;
   } else {
     console.log("\n--- Step 3: Generating Voiceover ---");
-    const { filePath, durationSeconds } = await generateVoiceover(scriptOutput.script);
-    // Move to topic-specific path
-    fs.renameSync(filePath, voiceoverPath);
+    const result = await generateVoiceover(scriptOutput.script);
+    fs.renameSync(result.filePath, voiceoverPath);
+    durationSeconds = result.durationSeconds;
     console.log(`Voiceover duration: ${durationSeconds.toFixed(1)}s`);
     console.log(`[Voiceover] Saved to ${voiceoverPath}`);
   }
+
+  // Step 3.5: Generate captions
+  console.log("\n--- Step 3.5: Generating Captions ---");
+  const { captionFilter } = prepareCaptions(scriptOutput.script, durationSeconds);
 
   // Step 4: Assemble video (always new visuals)
   const timestamp = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
   const outputFilename = `${topicKey}_${timestamp}.mp4`;
   console.log("\n--- Step 4: Assembling Video (new visuals, same audio) ---");
-  const videoPath = await assembleVideo(voiceoverPath, outputFilename);
+  const videoPath = await assembleVideo(voiceoverPath, outputFilename, captionFilter);
 
   if (noUpload) {
     console.log(`\n=== Pipeline Complete (no upload) ===`);

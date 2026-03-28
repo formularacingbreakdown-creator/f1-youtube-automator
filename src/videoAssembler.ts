@@ -170,7 +170,7 @@ function imageToClip(imagePath: string, clipPath: string, effectIndex: number): 
   });
 }
 
-function concatAndMix(clips: string[], voiceoverPath: string, outputPath: string): Promise<void> {
+function concatAndMix(clips: string[], voiceoverPath: string, outputPath: string, captionFilter?: string): Promise<void> {
   return new Promise((resolve, reject) => {
     const listPath = path.join(OUTPUT_DIR, "concat_list.txt");
     const listContent = clips.map((c) => `file '${path.resolve(c)}'`).join("\n");
@@ -193,7 +193,7 @@ function concatAndMix(clips: string[], voiceoverPath: string, outputPath: string
         "-b:a", "192k",
         "-r", String(FPS),
         "-shortest",
-        "-vf", `fade=t=in:st=0:d=0.5,fade=t=out:st=${fadeOutStart}:d=1.5`,
+        "-vf", `fade=t=in:st=0:d=0.5,fade=t=out:st=${fadeOutStart}:d=1.5${captionFilter ? "," + captionFilter : ""}`,
         "-movflags", "+faststart",
       ])
       .output(outputPath)
@@ -206,7 +206,7 @@ function concatAndMix(clips: string[], voiceoverPath: string, outputPath: string
   });
 }
 
-export async function assembleVideo(voiceoverPath: string, outputFilename = "final_video.mp4"): Promise<string> {
+export async function assembleVideo(voiceoverPath: string, outputFilename = "final_video.mp4", captionFilter?: string): Promise<string> {
   console.log("[Video] Starting vertical (1080x1920) video assembly for YouTube Shorts...");
 
   fs.mkdirSync(IMAGES_DIR, { recursive: true });
@@ -256,7 +256,7 @@ export async function assembleVideo(voiceoverPath: string, outputFilename = "fin
 
   const finalPath = path.join(OUTPUT_DIR, outputFilename);
   console.log(`[Video] Concatenating ${clipPaths.length} clips and mixing audio...`);
-  await concatAndMix(clipPaths, voiceoverPath, finalPath);
+  await concatAndMix(clipPaths, voiceoverPath, finalPath, captionFilter);
 
   console.log(`[Video] Image credits (Wikimedia Commons): ${credits.join(" | ")}`);
 

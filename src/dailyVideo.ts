@@ -7,6 +7,7 @@ import { generateVoiceover } from "./voiceover.js";
 import { assembleVideo } from "./videoAssembler.js";
 import { uploadToYouTube } from "./youtubeUploader.js";
 import { generateThumbnail } from "./thumbnailGenerator.js";
+import { prepareCaptions } from "./captions.js";
 import { getAvoidList, saveEntry, loadHistory } from "./history.js";
 import type { ScriptOutput } from "./types.js";
 
@@ -406,11 +407,15 @@ async function main() {
   const voiceoverPath = path.join(OUTPUT_DIR, "voiceover.mp3");
   console.log(`Voiceover duration: ${durationSeconds.toFixed(1)}s`);
 
+  // Step 3.5: Generate captions
+  console.log("\n--- Step 3.5: Generating Captions ---");
+  const { captionFilter } = prepareCaptions(scriptOutput.script, durationSeconds);
+
   // Step 4: Assemble video
   const timestamp = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
   const outputFilename = `daily_${contentType}_${timestamp}.mp4`;
   console.log("\n--- Step 4: Assembling Video ---");
-  const videoPath = await assembleVideo(voiceoverPath, outputFilename);
+  const videoPath = await assembleVideo(voiceoverPath, outputFilename, captionFilter);
 
   // Step 5: Generate thumbnail
   console.log("\n--- Step 5: Generating Thumbnail ---");
