@@ -2,7 +2,7 @@
 builder = "nixpacks"
 
 [build.nixpacksPlan.phases.setup]
-nixPkgs = ["ffmpeg"]
+nixPkgs = ["nodejs_22", "ffmpeg"]
 
 [build.nixpacksPlan.phases.install]
 cmds = ["npm install"]
